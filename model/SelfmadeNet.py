@@ -15,11 +15,12 @@ class SelfmadeNet(nn.Module):
             nn.Conv2d(16, 16, kernel_size=3, stride=1),
         )
         self.classifier = nn.Sequential(
-            # nn.Linear(16 * 4 * 4, 96),
-            nn.Linear(16 * 4 * 4, 128),
+            nn.Dropout(),
+            nn.Linear(16 * 4 * 4, 96),
+            # nn.Linear(16 * 4 * 4, 128),
             nn.ReLU(),
-            # nn.Linear(96, num_classes)
-            nn.Linear(128, num_classes),
+            nn.Linear(96, num_classes),
+            # nn.Linear(128, num_classes),
         )
 
     def forward(self, x):

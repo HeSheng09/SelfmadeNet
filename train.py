@@ -1,5 +1,5 @@
 import argparse
-from model import LeNet_5
+from model import LeNet_5, SelfmadeNet
 import torch
 from torchvision import datasets,transforms
 import sys
@@ -12,6 +12,9 @@ def parse_args():
       Parse input arguments
       """
     parser = argparse.ArgumentParser(description='Train a network')
+    parser.add_argument('--model',dest="model",
+                        help="model used",
+                        default="LeNet5", type=str)
     parser.add_argument('--num_classes', dest='num_classes',
                         help='num_classes',
                         default=10, type=int)
@@ -32,16 +35,36 @@ def parse_args():
                         default='none', type=str)
     parser.add_argument('--dataset', dest='dataset',
                         help="dataset used",
-                        default='CIFAR10', type=str)
+                        default='cifar10', type=str)
     parser.add_argument('--cuda', dest='cuda',
                         help="whether use cuda",
                         default=True, type=bool)
+    parser.add_argument('--other', dest='other',
+                        help="other information",
+                        default="", type=str)
     return parser.parse_args()
 
 
-def checkpoints_path():
-    return os.path.abspath(os.path.join(os.getcwd(), "checkpoints",
-                                        "LeNet5_{}.pth".format(time.strftime("%Y%m%d%H%M", time.localtime()))))
+def load_pretrained_model(model, pretrained):
+    """
+    加载预训练模型
+
+    :param model: net model
+    :param pretrained: /path/to/pretrained_model
+    :return: net model
+    """
+    if pretrained == "none":
+        pass
+    else:
+        pretrained_path = os.path.abspath(os.path.join(os.getcwd(), pretrained))
+        print(pretrained_path)
+        if os.path.exists(pretrained_path):
+            state_dict = torch.load(pretrained_path)
+            model.load_state_dict(state_dict)
+        else:
+            print("[error] wrong pretrained model")
+            sys.exit(1)
+    return model
 
 
 if __name__ == '__main__':
@@ -59,15 +82,24 @@ if __name__ == '__main__':
         device = torch.device("cpu")
     print("device used for training: {}.".format(device))
 
-    # 是否加载预训练模型
-    if args.pretrained == "none":
+    # 加载模型
+    if args.model == "LeNet5":
         net = LeNet_5()
+        # 加载预训练模型
+        net = load_pretrained_model(net, args.pretrained)
+        # 修改模型输出
         net.classifier[2] = torch.nn.Linear(84, args.num_classes)
-        print(net)
-        net.to(device)
+    elif args.model == "SelfmadeNet":
+        net = SelfmadeNet()
+        # 加载预训练模型
+        net = load_pretrained_model(net, args.pretrained)
+        # 修改模型输出
+        net.classifier[3] = torch.nn.Linear(96, args.num_classes)
     else:
-        print("[error] no pretrained model is confirmed for this net")
+        print("[error] unknown model")
         sys.exit(1)
+    net.to(device)
+    print(net)
 
     # 数据预处理
     data_transform = {
@@ -78,14 +110,14 @@ if __name__ == '__main__':
     }
 
     # 加载训练和验证数据
-    if args.dataset == "CIFAR10":
+    if args.dataset == "cifar10":
         train_set = datasets.CIFAR10(root=data_root, train=True, download=True, transform=data_transform['train'])
         train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,
                                                    num_workers=args.num_workers)
         val_set = datasets.CIFAR10(root=data_root, train=False, download=True, transform=data_transform['val'])
         val_loader = torch.utils.data.DataLoader(val_set, batch_size=args.batch_size, shuffle=True,
                                                  num_workers=args.num_workers)
-    elif args.dataset == "CIFAR100":
+    elif args.dataset == "cifar100":
         train_set = datasets.CIFAR100(root=data_root, train=True, download=True, transform=data_transform['train'])
         train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,
                                                    num_workers=args.num_workers)
@@ -136,7 +168,10 @@ if __name__ == '__main__':
             val_accurate = acc / (len(val_loader) * args.batch_size)
             if val_accurate > best_acc:
                 best_acc = val_accurate
-                save_path = checkpoints_path()
+                if args.other != "":
+                    save_path = os.path.abspath(os.path.join(os.getcwd(), "checkpoints", "{}_{}_{}_{:0>3d}.pth".format(args.model, args.other, args.dataset, int(best_acc*1000))))
+                else:
+                    save_path = os.path.abspath(os.path.join(os.getcwd(), "checkpoints", "{}_{}_{:0>3d}.pth".format(args.model, args.dataset, int(best_acc*1000))))
                 torch.save(net.state_dict(), save_path)
                 print(
                     'train_loss: {:.3f}  test_accuracy: {:.3f} \ncheckpoint saved at: {}\n'.format(running_loss / step,
